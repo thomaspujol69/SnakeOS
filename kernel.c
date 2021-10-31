@@ -40,10 +40,10 @@ uint32_t pcg32_random_r(pcg32_random_t* rng)
 
 int random(int max) { 
   uint32 r = pcg32_random_r(&rngGlobal);
-  if (max*r/547483647>((uint32)max)){
+  if (max*r/300000000>((uint32)max)){
     return max;
   }
-  return max*r/547483647;
+  return max*r/300000000;
 }
 
 void wait_for_io(){
@@ -338,8 +338,8 @@ int start_game(int w, int h){
   grid[3][3]=BROWN;
   int applex, appley;
   do{
-    applex=random(h);
-    appley=random(w);
+    applex=random(w);
+    appley=random(h);
   }while (is_in(applex, appley, snake_x, snake_y, snake_length));
   grid[applex][appley]=BRIGHT_MAGENTA;
   draw_state(w, h, grid);
@@ -371,8 +371,8 @@ int start_game(int w, int h){
     if (grid[snake_x[0]][snake_y[0]] != BLACK && grid[snake_x[0]][snake_y[0]] != BROWN){ // miam
       cWhile=0;
       do{
-        applex=random(h);
-        appley=random(w);
+        applex=random(w);
+        appley=random(h);
         cWhile++;
         if (cWhile>32000){
           for (int i=0; i<w; i++){
@@ -384,10 +384,10 @@ int start_game(int w, int h){
               }
             }
           }
-          EndDoubleFor:;
           //return snake_length;
         }
       }while (is_in(applex, appley, snake_x, snake_y, snake_length));
+      EndDoubleFor:;
       grid[applex][appley]=BRIGHT_MAGENTA;
       snake_length++;
       grid[old_posx][old_posy] = BLACK;
