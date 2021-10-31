@@ -7,7 +7,7 @@ static uint32 next_line_index = 1;
 uint8 g_fore_color = WHITE, g_back_color = BLUE;
 int digit_ascii_codes[10] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39};
 typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
-pcg32_random_t rngGlobal = { 0x85dc79e6728fea9bULL, 0xda3e39cb94b95bdbULL };
+pcg32_random_t rngGlobal = { 0xeeee17e6728fea9bULL, 0xda3e000b94b95bdbULL };
 
 uint32_t pcg32_random_r(pcg32_random_t* rng)
 {
@@ -338,7 +338,7 @@ void start_game(int w, int h){
   speed = 2500;
   int snake_x[128] = {0};
   int snake_y[128] = {0};
-  int snake_length = 0; 
+  int snake_length = 1; 
   
   for (int i=0; i<w; i++){
     for (int j=0; j<h; j++){
@@ -363,8 +363,8 @@ void start_game(int w, int h){
   while (!finished){
     direction = get_direction(speed, direction);
 
-    old_posx = snake_x[snake_length];
-    old_posy = snake_y[snake_length];
+    old_posx = snake_x[snake_length-1];
+    old_posy = snake_y[snake_length-1];
     for(int i=snake_length; i>0; i--){ // On décale les valeurs
       snake_x[i]=snake_x[i-1];
       snake_y[i]=snake_y[i-1];
@@ -388,12 +388,13 @@ void start_game(int w, int h){
       }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
       grid[applex][appley]=BRIGHT_MAGENTA;
       snake_length++;
+    }else{
+      grid[old_posx][old_posy] = BLACK; // Lorsqu'on mange on laisse le dernier carré
     }
     if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN || snake_length==(w*h)){
       finished=1;
     }
     print_int(old_posy);
-    grid[old_posx][old_posy] = BLACK; // erreur lorsque out of bounds 
     grid[snake_x[0]][snake_y[0]] = BROWN;
     draw_state(w, h, grid);
     //speed=speed*0.993;
