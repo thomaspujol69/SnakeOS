@@ -1,10 +1,37 @@
 #include "kernel.h"
 #include "utils.h"
+#include <unistd.h>
 
 uint32 vga_index;
 static uint32 next_line_index = 1;
 uint8 g_fore_color = WHITE, g_back_color = BLUE;
 int digit_ascii_codes[10] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39};
+
+void wait_for_io(uint32 timer_count)
+{
+  while(1){
+    asm volatile("nop");
+    timer_count--;
+    if(timer_count <= 0)
+      break;
+    }
+}
+/*
+void sleep(uint32 timer_count)
+{
+  wait_for_io(timer_count);
+}
+
+void sleep(){
+  int i,j=0;
+  while (i<1000000){
+    while (j<1000000){
+      j++;
+    }
+    i++;
+  }
+}
+*/
 
 uint16 vga_entry(unsigned char ch, uint8 fore_color, uint8 back_color) 
 {
@@ -26,7 +53,7 @@ void clear_vga_buffer(uint16 **buffer, uint8 fore_color, uint8 back_color)
 {
   uint32 i;
   for(i = 0; i < BUFSIZE; i++){
-    (*buffer)[i] = vga_entry(NULL, fore_color, back_color);
+    (*buffer)[i] = vga_entry(0, fore_color, back_color);
   }
   next_line_index = 1;
   vga_index = 0;
@@ -220,26 +247,88 @@ void draw_grid(){
 
 void color_case(int i, int j, int w, int h, uint8 col){
   if (i==0){
-    fill_box(NULL, i*BOX_MAX_WIDTH/w+1, j*(BOX_MAX_HEIGHT/h+1)+1, BOX_MAX_WIDTH/w-1, BOX_MAX_HEIGHT/h, col);
+    fill_box(0, i*BOX_MAX_WIDTH/w+1, j*(BOX_MAX_HEIGHT/h+1)+1, BOX_MAX_WIDTH/w-1, BOX_MAX_HEIGHT/h, col);
   }else{
     if (i>=9){ // Pourquoi ??! Je ne sais pas...
-      fill_box(NULL, i*BOX_MAX_WIDTH/w+2, j*(BOX_MAX_HEIGHT/h+1)+1, BOX_MAX_WIDTH/w, BOX_MAX_HEIGHT/h, col);
+      fill_box(0, i*BOX_MAX_WIDTH/w+2, j*(BOX_MAX_HEIGHT/h+1)+1, BOX_MAX_WIDTH/w, BOX_MAX_HEIGHT/h, col);
     }else{
-      fill_box(NULL, i*BOX_MAX_WIDTH/w+1, j*(BOX_MAX_HEIGHT/h+1)+1, BOX_MAX_WIDTH/w, BOX_MAX_HEIGHT/h, col);
+      fill_box(0, i*BOX_MAX_WIDTH/w+1, j*(BOX_MAX_HEIGHT/h+1)+1, BOX_MAX_WIDTH/w, BOX_MAX_HEIGHT/h, col);
+    }
+  }
+}
+
+void draw_state(int w, int h, uint8 (*pos)[h]){
+  for (int i=0; i<w; i++){
+    for (int j=0; j<h; j++){
+      color_case(i, j, w, h, pos[i][j]);
     }
   }
 }
 
 void start_game(int w, int h){
   int direction=0;
-  /*
-  0 right
-  1 left
-  2 up
-  3 down
-  */
-  //int pos[2][128] = 0;
+  uint8 grid[w][h];
+  int speed = 20000;
+  int max_snake_length = w*h;
+  int snake_x[128] = {0};
+  int snake_y[128] = {0};
+  int snake_length = 0;
+  
+  for (int i=0; i<w; i++){
+    for (int j=0; j<h; j++){
+      grid[i][j] = BLACK;
+    }
+  }
 
+  snake_x[0]=3;
+  snake_y[0]=3;
+  grid[3][3]=BROWN;
+  grid[9][6]=BRIGHT_MAGENTA;
+  draw_state(w, h, grid);
+  int old_posx, old_posy;
+  uint8 finished = 0;
+  while (!finished){
+    
+    for(int i=0; i<speed; i++)
+      for(int j=0; j<speed; j++);
+    
+    //wait_for_io(32000);
+    old_posx = snake_x[snake_length];
+    old_posy = snake_y[snake_length];
+    for(int i=snake_length; i>0; i--){
+      snake_x[snake_length]=snake_x[snake_length-1];
+      snake_y[snake_length]=snake_y[snake_length-1];
+    } // On modifie le serpent
+    //On met à jour la grille
+    grid[old_posx][old_posy] = BLACK;
+    /*  0 right
+        1 left
+        2 up
+        3 down  */
+    if (direction==0){ //right
+      snake_x[0]=snake_x[0]+1;  //width
+      snake_y[0]=snake_y[0];    // height
+    }else if(direction==1){
+      snake_x[0]=snake_x[0]-1;  //width
+      snake_y[0]=snake_y[0];    // height
+    }else if(direction==2){
+      snake_x[0]=snake_x[0];  //width
+      snake_y[0]=snake_y[0]-1;    // height
+    }else{
+      snake_x[0]=snake_x[0];  //width
+      snake_y[0]=snake_y[0]+1;    // height
+    }
+    grid[snake_x[0]][snake_y[0]] = BROWN;
+    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0){
+      finished=1;
+    }
+    draw_state(w, h, grid);
+    speed-=50;
+  }
+  
+  char* str = "Game Over";
+  gotoxy((VGA_MAX_WIDTH/2)-strlen(str), 1);
+  print_color_string(str, WHITE, BLACK);
 }
 
 void kernel_entry()
@@ -250,6 +339,7 @@ void kernel_entry()
 
   //gotoxy((VGA_MAX_WIDTH/2)-strlen(str), 1);
   //print_color_string("Box Demo", WHITE, BLACK);
+
   int w=0;
   int h=0;
   for (int i=0; i<BOX_MAX_WIDTH; i=i+5){
@@ -261,15 +351,12 @@ void kernel_entry()
     h++;
   }
   
-  for (int i=0; i<w; i++){
-    for (int j=0; j<h; j++){
-      //color_case(i, j, w, h, BLACK);
-    }
-  }
+  start_game(w, h);
+
   //draw_grid()
   
-  // NULL for only to fill colors, or provide any other character
-  /*fill_box(NULL, 36, 5, 30, 10, RED);
+  // 0 for only to fill colors, or provide any other character
+  /*fill_box(0, 36, 5, 30, 10, RED);
 
   fill_box(1, 6, 16, 30, 4, GREEN);
   draw_box(BOX_DOUBLELINE, 6, 16, 28, 3, BLUE, GREEN);
