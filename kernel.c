@@ -265,14 +265,54 @@ void draw_state(int w, int h, uint8 (*pos)[h]){
   }
 }
 
+uint8 inb(uint16 port)
+{
+  uint8 ret;
+  asm volatile("inb %1, %0" : "=a"(ret) : "d"(port));
+  return ret;
+}
+
+char get_input_keycode()
+{
+  char ch = inb(KEYBOARD_PORT);
+  if (ch<0){
+    return 0;
+  }
+  return ch;
+}
+
+int get_direction(int speed, int d){
+  int direction = d;
+  for(int i=0; i<speed; i++){
+    for(int j=0; j<speed; j++){
+      char keycode = get_input_keycode();
+      /*  0 right
+        1 left
+        2 up
+        3 down  */
+      if (keycode==KEY_RIGHT){
+        direction = 0;
+      }else if(keycode==KEY_LEFT){
+        direction = 1;
+      }else if(keycode==KEY_UP){
+        direction = 2;
+      }else if(keycode==KEY_DOWN){
+        direction = 3;
+      }
+    }
+  } 
+  return direction;
+}
+
 void start_game(int w, int h){
   int direction=0;
   uint8 grid[w][h];
-  int speed = 20000;
+  int speed = 3000;
   int max_snake_length = w*h;
   int snake_x[128] = {0};
   int snake_y[128] = {0};
   int snake_length = 0;
+  int apple[2] = {3, 4};
   
   for (int i=0; i<w; i++){
     for (int j=0; j<h; j++){
@@ -283,47 +323,51 @@ void start_game(int w, int h){
   snake_x[0]=3;
   snake_y[0]=3;
   grid[3][3]=BROWN;
-  grid[9][6]=BRIGHT_MAGENTA;
+  grid[apple[0]][apple[1]]=BRIGHT_MAGENTA;
   draw_state(w, h, grid);
   int old_posx, old_posy;
   uint8 finished = 0;
+  int addX, addY;
+
   while (!finished){
-    
-    for(int i=0; i<speed; i++)
-      for(int j=0; j<speed; j++);
-    
-    //wait_for_io(32000);
+    direction = get_direction(speed, direction);
+
     old_posx = snake_x[snake_length];
     old_posy = snake_y[snake_length];
-    for(int i=snake_length; i>0; i--){
-      snake_x[snake_length]=snake_x[snake_length-1];
-      snake_y[snake_length]=snake_y[snake_length-1];
+    for(int i=snake_length; i>0; i--){ // On décale les valeurs
+      snake_x[i]=snake_x[i-1];
+      snake_y[i]=snake_y[i-1];
     } // On modifie le serpent
     //On met à jour la grille
-    grid[old_posx][old_posy] = BLACK;
     /*  0 right
         1 left
         2 up
         3 down  */
-    if (direction==0){ //right
-      snake_x[0]=snake_x[0]+1;  //width
-      snake_y[0]=snake_y[0];    // height
+    addX=0;
+    addY=0;
+    if (direction==0){
+      addX++;    // width
     }else if(direction==1){
-      snake_x[0]=snake_x[0]-1;  //width
-      snake_y[0]=snake_y[0];    // height
+      addX--;    // width
     }else if(direction==2){
-      snake_x[0]=snake_x[0];  //width
-      snake_y[0]=snake_y[0]-1;    // height
+      addY--;    // height
     }else{
-      snake_x[0]=snake_x[0];  //width
-      snake_y[0]=snake_y[0]+1;    // height
+      addY++;    // height
     }
-    grid[snake_x[0]][snake_y[0]] = BROWN;
-    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0){
+    snake_x[0]=snake_x[0]+addX;    // width
+    snake_y[0]=snake_y[0]+addY;    // height
+    if (grid[snake_x[0]][snake_y[0]] != BLACK){
+      // Il mange 
+      grid[3][7]=BRIGHT_MAGENTA;
+      snake_length++;
+    }
+    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN){
       finished=1;
     }
+    grid[old_posx][old_posy] = BLACK;
+    grid[snake_x[0]][snake_y[0]] = BROWN;
     draw_state(w, h, grid);
-    speed-=50;
+    speed=speed*0.993;
   }
   
   char* str = "Game Over";
