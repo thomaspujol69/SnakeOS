@@ -6,6 +6,24 @@ uint32 vga_index;
 static uint32 next_line_index = 1;
 uint8 g_fore_color = WHITE, g_back_color = BLUE;
 int digit_ascii_codes[10] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39};
+typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
+pcg32_random_t rngGlobal = { 0x85dc79e6728fea9bULL, 0xda3e39cb94b95bdbULL };
+
+uint32_t pcg32_random_r(pcg32_random_t* rng)
+{
+    uint64_t oldstate = rng->state;
+    // Advance internal state
+    rng->state = oldstate * 6364136223846793005ULL + (rng->inc|1);
+    // Calculate output function (XSH RR), uses old state for max ILP
+    uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+    uint32_t rot = oldstate >> 59u;
+    return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+}
+
+int random(int max) { 
+  uint32 r = pcg32_random_r(&rngGlobal);
+  return max*r/747483647;
+}
 
 void wait_for_io(uint32 timer_count)
 {
@@ -304,15 +322,23 @@ int get_direction(int speed, int d){
   return direction;
 }
 
+int is_in(int ap, int ar[], int sLen){
+  for (int i=0; i<sLen; i++){
+    if(ar[i]==ap){
+      return 1;
+    }
+  }
+  return 0;
+}
+
 void start_game(int w, int h){
   int direction=0;
   uint8 grid[w][h];
   int speed = 3000;
-  int max_snake_length = w*h;
+  speed = 2500;
   int snake_x[128] = {0};
   int snake_y[128] = {0};
-  int snake_length = 0;
-  int apple[2] = {3, 4};
+  int snake_length = 0; 
   
   for (int i=0; i<w; i++){
     for (int j=0; j<h; j++){
@@ -323,7 +349,12 @@ void start_game(int w, int h){
   snake_x[0]=3;
   snake_y[0]=3;
   grid[3][3]=BROWN;
-  grid[apple[0]][apple[1]]=BRIGHT_MAGENTA;
+  int applex, appley;
+  do{
+    applex=random(w);
+    appley=random(h);
+  }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
+  grid[applex][appley]=BRIGHT_MAGENTA;
   draw_state(w, h, grid);
   int old_posx, old_posy;
   uint8 finished = 0;
@@ -338,13 +369,7 @@ void start_game(int w, int h){
       snake_x[i]=snake_x[i-1];
       snake_y[i]=snake_y[i-1];
     } // On modifie le serpent
-    //On met à jour la grille
-    /*  0 right
-        1 left
-        2 up
-        3 down  */
-    addX=0;
-    addY=0;
+    addX=0; addY=0;
     if (direction==0){
       addX++;    // width
     }else if(direction==1){
@@ -356,18 +381,23 @@ void start_game(int w, int h){
     }
     snake_x[0]=snake_x[0]+addX;    // width
     snake_y[0]=snake_y[0]+addY;    // height
-    if (grid[snake_x[0]][snake_y[0]] != BLACK){
-      // Il mange 
-      grid[3][7]=BRIGHT_MAGENTA;
+    if (grid[snake_x[0]][snake_y[0]] != BLACK){ // miam
+      do{
+        applex=random(w);
+        appley=random(h);
+      }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
+      grid[applex][appley]=BRIGHT_MAGENTA;
       snake_length++;
     }
-    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN){
+    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN || snake_length==(w*h)){
       finished=1;
     }
-    grid[old_posx][old_posy] = BLACK;
+    print_int(old_posy);
+    grid[old_posx][old_posy] = BLACK; // erreur lorsque out of bounds 
     grid[snake_x[0]][snake_y[0]] = BROWN;
     draw_state(w, h, grid);
-    speed=speed*0.993;
+    //speed=speed*0.993;
+    speed=speed*0.9975;
   }
   
   char* str = "Game Over";
