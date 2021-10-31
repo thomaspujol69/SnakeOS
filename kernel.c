@@ -7,7 +7,9 @@ static uint32 next_line_index = 1;
 uint8 g_fore_color = WHITE, g_back_color = BLUE;
 int digit_ascii_codes[10] = {0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39};
 typedef struct { uint64_t state;  uint64_t inc; } pcg32_random_t;
-pcg32_random_t rngGlobal = { 0xeeee17e6728fea9bULL, 0xda3e000b94b95bdbULL };
+pcg32_random_t rngGlobal = { 0xeeee1fecd2ff7a9bULL, 0xda3efffb94b95bdbULL };
+int ahValue = 4; // diviser par deux pour le mode nightmare
+int axValue = 8; // diviser par deux pour le mode nightmare
 
 uint32_t pcg32_random_r(pcg32_random_t* rng)
 {
@@ -22,7 +24,7 @@ uint32_t pcg32_random_r(pcg32_random_t* rng)
 
 int random(int max) { 
   uint32 r = pcg32_random_r(&rngGlobal);
-  return max*r/747483647;
+  return max*r/547483647;
 }
 
 void wait_for_io(uint32 timer_count)
@@ -139,10 +141,10 @@ uint16 get_box_draw_char(uint8 chn, uint8 fore_color, uint8 back_color)
   uint8 ah = 0;
 
   ah = back_color;
-  ah <<= 4;
+  ah <<= ahValue;
   ah |= fore_color;
   ax = ah;
-  ax <<= 8;
+  ax <<= axValue;
   ax |= chn;
 
   return ax;
@@ -351,8 +353,8 @@ void start_game(int w, int h){
   grid[3][3]=BROWN;
   int applex, appley;
   do{
-    applex=random(w);
-    appley=random(h);
+    applex=random(h);
+    appley=random(w);
   }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
   grid[applex][appley]=BRIGHT_MAGENTA;
   draw_state(w, h, grid);
@@ -365,7 +367,7 @@ void start_game(int w, int h){
 
     old_posx = snake_x[snake_length-1];
     old_posy = snake_y[snake_length-1];
-    for(int i=snake_length; i>0; i--){ // On décale les valeurs
+    for(int i=snake_length-1; i>0; i--){ // On décale les valeurs
       snake_x[i]=snake_x[i-1];
       snake_y[i]=snake_y[i-1];
     } // On modifie le serpent
@@ -381,20 +383,21 @@ void start_game(int w, int h){
     }
     snake_x[0]=snake_x[0]+addX;    // width
     snake_y[0]=snake_y[0]+addY;    // height
-    if (grid[snake_x[0]][snake_y[0]] != BLACK){ // miam
+    if (grid[snake_x[0]][snake_y[0]] != BLACK && grid[snake_x[0]][snake_y[0]] != BROWN){ // miam
       do{
-        applex=random(w);
-        appley=random(h);
+        applex=random(h);
+        appley=random(w);
       }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
       grid[applex][appley]=BRIGHT_MAGENTA;
       snake_length++;
+      grid[old_posx][old_posy] = BLACK;
     }else{
       grid[old_posx][old_posy] = BLACK; // Lorsqu'on mange on laisse le dernier carré
     }
-    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN || snake_length==(w*h)){
+    if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN ||snake_length>=(w*h)){
       finished=1;
     }
-    print_int(old_posy);
+    print_int(snake_length);
     grid[snake_x[0]][snake_y[0]] = BROWN;
     draw_state(w, h, grid);
     //speed=speed*0.993;
@@ -407,13 +410,9 @@ void start_game(int w, int h){
 }
 
 void kernel_entry()
-{
-  //const char*str = "Box Demo";
+{ 
 
-  init_vga(WHITE, BLACK);
-
-  //gotoxy((VGA_MAX_WIDTH/2)-strlen(str), 1);
-  //print_color_string("Box Demo", WHITE, BLACK);
+  init_vga(WHITE, BLACK); 
 
   int w=0;
   int h=0;
