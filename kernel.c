@@ -11,6 +11,22 @@ pcg32_random_t rngGlobal = { 0xeeee1fecd2ff7a9bULL, 0xda3efffb94b95bdbULL };
 int ahValue = 4; // diviser par deux pour le mode nightmare
 int axValue = 8; // diviser par deux pour le mode nightmare
 
+uint8 inb(uint16 port)
+{
+  uint8 ret;
+  asm volatile("inb %1, %0" : "=a"(ret) : "d"(port));
+  return ret;
+}
+
+char get_input_keycode()
+{
+  char ch = inb(KEYBOARD_PORT);
+  if (ch<0){
+    return 0;
+  }
+  return ch;
+}
+
 uint32_t pcg32_random_r(pcg32_random_t* rng)
 {
     uint64_t oldstate = rng->state;
@@ -24,34 +40,19 @@ uint32_t pcg32_random_r(pcg32_random_t* rng)
 
 int random(int max) { 
   uint32 r = pcg32_random_r(&rngGlobal);
+  if (max*r/547483647>((uint32)max)){
+    return max;
+  }
   return max*r/547483647;
 }
 
-void wait_for_io(uint32 timer_count)
-{
+void wait_for_io(){
   while(1){
-    asm volatile("nop");
-    timer_count--;
-    if(timer_count <= 0)
-      break;
+    if (get_input_keycode()!=0){
+      return;
     }
-}
-/*
-void sleep(uint32 timer_count)
-{
-  wait_for_io(timer_count);
-}
-
-void sleep(){
-  int i,j=0;
-  while (i<1000000){
-    while (j<1000000){
-      j++;
-    }
-    i++;
   }
 }
-*/
 
 uint16 vga_entry(unsigned char ch, uint8 fore_color, uint8 back_color) 
 {
@@ -285,22 +286,6 @@ void draw_state(int w, int h, uint8 (*pos)[h]){
   }
 }
 
-uint8 inb(uint16 port)
-{
-  uint8 ret;
-  asm volatile("inb %1, %0" : "=a"(ret) : "d"(port));
-  return ret;
-}
-
-char get_input_keycode()
-{
-  char ch = inb(KEYBOARD_PORT);
-  if (ch<0){
-    return 0;
-  }
-  return ch;
-}
-
 int get_direction(int speed, int d){
   int direction = d;
   for(int i=0; i<speed; i++){
@@ -324,16 +309,16 @@ int get_direction(int speed, int d){
   return direction;
 }
 
-int is_in(int ap, int ar[], int sLen){
+int is_in(int ap, int ap2, int ar1[], int ar2[], int sLen){
   for (int i=0; i<sLen; i++){
-    if(ar[i]==ap){
+    if(ar1[i]==ap && ar2[i]==ap2){
       return 1;
     }
   }
   return 0;
 }
 
-void start_game(int w, int h){
+int start_game(int w, int h){
   int direction=0;
   uint8 grid[w][h];
   int speed = 3000;
@@ -355,12 +340,12 @@ void start_game(int w, int h){
   do{
     applex=random(h);
     appley=random(w);
-  }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
+  }while (is_in(applex, appley, snake_x, snake_y, snake_length));
   grid[applex][appley]=BRIGHT_MAGENTA;
   draw_state(w, h, grid);
   int old_posx, old_posy;
   uint8 finished = 0;
-  int addX, addY;
+  int addX, addY, cWhile;
 
   while (!finished){
     direction = get_direction(speed, direction);
@@ -384,10 +369,25 @@ void start_game(int w, int h){
     snake_x[0]=snake_x[0]+addX;    // width
     snake_y[0]=snake_y[0]+addY;    // height
     if (grid[snake_x[0]][snake_y[0]] != BLACK && grid[snake_x[0]][snake_y[0]] != BROWN){ // miam
+      cWhile=0;
       do{
         applex=random(h);
         appley=random(w);
-      }while (is_in(applex, snake_x, snake_length) && is_in(appley, snake_y, snake_length));
+        cWhile++;
+        if (cWhile>32000){
+          for (int i=0; i<w; i++){
+            for (int j=0;j<h; j++){
+              applex=i;
+              appley=j;
+              if (is_in(applex, appley, snake_x, snake_y, snake_length)){
+                goto EndDoubleFor;
+              }
+            }
+          }
+          EndDoubleFor:;
+          //return snake_length;
+        }
+      }while (is_in(applex, appley, snake_x, snake_y, snake_length));
       grid[applex][appley]=BRIGHT_MAGENTA;
       snake_length++;
       grid[old_posx][old_posy] = BLACK;
@@ -395,45 +395,56 @@ void start_game(int w, int h){
       grid[old_posx][old_posy] = BLACK; // Lorsqu'on mange on laisse le dernier carré
     }
     if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN ||snake_length>=(w*h)){
-      finished=1;
+      return snake_length;
     }
     print_int(snake_length);
     grid[snake_x[0]][snake_y[0]] = BROWN;
     draw_state(w, h, grid);
     //speed=speed*0.993;
-    speed=speed*0.9975;
-  }
-  
-  char* str = "Game Over";
-  gotoxy((VGA_MAX_WIDTH/2)-strlen(str), 1);
-  print_color_string(str, WHITE, BLACK);
+    speed=speed*0.998;
+  } 
+  return 0;
 }
 
 void kernel_entry()
 { 
-
-  init_vga(WHITE, BLACK); 
-
   int w=0;
   int h=0;
-  for (int i=0; i<BOX_MAX_WIDTH; i=i+5){
-    draw_box(BOX_SINGLELINE, 0, 0, BOX_MAX_WIDTH-i, BOX_MAX_HEIGHT, WHITE, BLACK);
-    w++;
-  }
-  for (int i=0; i<BOX_MAX_HEIGHT; i=i+3){
-    draw_box(BOX_SINGLELINE, 0, 0, BOX_MAX_WIDTH, BOX_MAX_HEIGHT-i, WHITE, BLACK);
-    h++;
-  }
-  
-  start_game(w, h);
 
-  //draw_grid()
-  
-  // 0 for only to fill colors, or provide any other character
-  /*fill_box(0, 36, 5, 30, 10, RED);
+  char* str = "Appuyez sur une touche pour commencer la partie.";
+  int result;
+  init_vga(WHITE, BLACK); 
+  while (1){
+    print_string(str);
+    for (int i=0; i<32000; i++){
+      for (int j=0; j<22000; j++){
+      
+      }
+    }
+    wait_for_io();
 
-  fill_box(1, 6, 16, 30, 4, GREEN);
-  draw_box(BOX_DOUBLELINE, 6, 16, 28, 3, BLUE, GREEN);
-  */
+    init_vga(WHITE, BLACK); 
+    w=0;
+    h=0;
+    for (int i=0; i<BOX_MAX_WIDTH; i=i+5){
+      draw_box(BOX_SINGLELINE, 0, 0, BOX_MAX_WIDTH-i, BOX_MAX_HEIGHT, WHITE, BLACK);
+      w++;
+    }
+    for (int i=0; i<BOX_MAX_HEIGHT; i=i+3){
+      draw_box(BOX_SINGLELINE, 0, 0, BOX_MAX_WIDTH, BOX_MAX_HEIGHT-i, WHITE, BLACK);
+      h++;
+    }
+    
+    result = start_game(w, h);
+
+    init_vga(WHITE, BLACK); 
+
+    print_new_line();
+    print_string("Game Over !");
+    print_new_line();
+    print_string("Score : ");
+    print_int(result);
+    print_new_line();
+  }
 }
 
