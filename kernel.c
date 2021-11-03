@@ -322,7 +322,7 @@ int start_game(int w, int h){
   int direction=0;
   uint8 grid[w][h];
   int speed = 3000;
-  speed = 2500;
+  speed = 600; // 2500 départ
   int snake_x[128] = {0};
   int snake_y[128] = {0};
   int snake_length = 1; 
@@ -390,8 +390,8 @@ int start_game(int w, int h){
       EndDoubleFor:;
       grid[applex][appley]=BRIGHT_MAGENTA;
       snake_length++;
-      grid[old_posx][old_posy] = BLACK;
-    }else{
+    }
+    if(grid[old_posx][old_posy]!=BRIGHT_MAGENTA){
       grid[old_posx][old_posy] = BLACK; // Lorsqu'on mange on laisse le dernier carré
     }
     if (snake_x[0]>=w || snake_y[0]>=h || snake_x[0]<0 || snake_y[0]<0 || grid[snake_x[0]][snake_y[0]]==BROWN ||snake_length>=(w*h)){
@@ -401,7 +401,14 @@ int start_game(int w, int h){
     grid[snake_x[0]][snake_y[0]] = BROWN;
     draw_state(w, h, grid);
     //speed=speed*0.993;
-    speed=speed*0.998;
+    if((speed-speed*0.998)<1){
+      speed-=1;
+    }else{
+      speed=speed*0.998;
+    }
+    if (speed==0){
+      speed=1;
+    }
   } 
   return 0;
 }
