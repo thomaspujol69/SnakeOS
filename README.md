@@ -1,7 +1,7 @@
 # SnakeOS
 Tu connais la musique
 
-## Exécution
+## Exécution
 Exécuter `run.sh`
 
 ## Licence 
